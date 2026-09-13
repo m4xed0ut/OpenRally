@@ -16,7 +16,15 @@ export interface GamepadRumbleOptions {
 }
 
 let lastRumbleTimestamp = 0;
+let rumbleUntilTimestamp = 0;
 const MIN_RUMBLE_INTERVAL_MS = 60; // Throttles frequent rumble requests
+
+/**
+ * Checks whether gamepad rumble is currently active or within effect duration.
+ */
+export function isGamepadRumbling(): boolean {
+  return performance.now() < rumbleUntilTimestamp;
+}
 
 /**
  * Triggers dual-rumble vibration on the currently active gamepad.
@@ -37,13 +45,20 @@ export function playGamepadRumble(options: GamepadRumbleOptions = {}): void {
 
   // Check for W3C vibrationActuator (or fallback actuator)
   // Type assertion for GamepadHapticActuator
-  const actuator = (gp as unknown as { vibrationActuator?: { playEffect: (type: string, params: object) => Promise<unknown> } }).vibrationActuator;
+  const actuator = (gp as unknown as {
+    vibrationActuator?: {
+      reset?: () => Promise<unknown>;
+      playEffect?: (type: string, params: object) => Promise<unknown>;
+    };
+  }).vibrationActuator;
   if (!actuator || typeof actuator.playEffect !== 'function') return;
 
   const weak = Math.max(0, Math.min(1, (options.weakMagnitude ?? 0.3) * vibrationIntensity));
   const strong = Math.max(0, Math.min(1, (options.strongMagnitude ?? 0.3) * vibrationIntensity));
   const duration = Math.max(20, Math.min(2000, options.duration ?? 150));
   const startDelay = options.startDelay ?? 0;
+
+  rumbleUntilTimestamp = weak > 0 || strong > 0 ? now + startDelay + duration : 0;
 
   try {
     actuator
@@ -58,6 +73,48 @@ export function playGamepadRumble(options: GamepadRumbleOptions = {}): void {
       });
   } catch {
     // Ignore unsupported browser environments
+  }
+}
+
+/**
+ * Immediately cancels and stops any active vibration / haptic rumble on the active gamepad.
+ * @param force - If true, sends cancellation even if internal timer thinks rumble has expired
+ */
+export function stopGamepadRumble(force = false): void {
+  const now = performance.now();
+  if (!force && now >= rumbleUntilTimestamp) {
+    return;
+  }
+  rumbleUntilTimestamp = 0;
+  lastRumbleTimestamp = 0;
+
+  const gp = getActiveGamepad();
+  if (!gp || !gp.connected) return;
+
+  const actuator = (gp as unknown as {
+    vibrationActuator?: {
+      reset?: () => Promise<unknown>;
+      playEffect?: (type: string, params: object) => Promise<unknown>;
+    };
+  }).vibrationActuator;
+
+  if (!actuator) return;
+
+  try {
+    if (typeof actuator.reset === 'function') {
+      actuator.reset().catch(() => {});
+    } else if (typeof actuator.playEffect === 'function') {
+      actuator
+        .playEffect('dual-rumble', {
+          startDelay: 0,
+          duration: 10,
+          weakMagnitude: 0,
+          strongMagnitude: 0,
+        })
+        .catch(() => {});
+    }
+  } catch {
+    // Gracefully ignore browser haptic errors
   }
 }
 
