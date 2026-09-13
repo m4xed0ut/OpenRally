@@ -8,41 +8,39 @@ import { VEHICLE_VORTEX_B_MODEL_PATH } from '@/config/assets';
 export const VORTEX_B_VEHICLE_CONFIG: VehicleConfig = {
   chassisMass: 138,
   chassisSize: [1.84, 0.58, 4.1],
-  weightDistribution: {
-    frontBias: 0.47, // Mid-engine 47/53 rearward bias for traction and agility
-    engineOffsetZ: -0.15,
-    engineOffsetY: -0.16,
-    centerOfMassZ: -0.02,
-  },
   engine: {
-    maxForce: 450,
+    maxForce: 235,
     maxSpeed: 280,
+    engineBrakingForce: 130, // Sharp Group B compression braking
   },
   drivetrain: {
-    frontBias: 0.45, // 45/55 Rear-biased AWD for aggressive rally drifts
+    frontBias: 0.46, // 46/54 Rear-biased AWD for aggressive rally drifts
+    frontPower: 215,
+    rearPower: 230,
+    slideFrontPowerBoost: 110,
   },
   brakes: {
-    maxForce: 20,
-    handbrakeForce: 75,
+    maxForce: 900,
+    handbrakeForce: 460,
     frontBias: 0.52,
   },
   suspension: {
-    frontAntiRollBarStiffness: 19.5,
-    rearAntiRollBarStiffness: 22.5,
-    antiSquatStiffness: 38.0,
+    frontAntiRollBarStiffness: 12.0,
+    rearAntiRollBarStiffness: 7.0,
   },
   handling: {
     steeringCurve: [
-      [0, Math.PI / 3.6],
-      [40, Math.PI / 4.3],
-      [90, Math.PI / 6.7],
-      [150, Math.PI / 10.2],
-      [240, Math.PI / 15.0],
+      [0, Math.PI / 4.4],    // ~40.9 degrees at 0 km/h (aggressive rally hairpins)
+      [30, Math.PI / 7.2],   // ~25.0 degrees at 30 km/h
+      [60, Math.PI / 11.5],  // ~15.6 degrees at 60 km/h
+      [90, Math.PI / 17.0],  // ~10.6 degrees at 90 km/h
+      [140, Math.PI / 25.0], // ~7.2 degrees at 140 km/h
+      [220, Math.PI / 36.0], // ~5.0 degrees at 220 km/h
     ],
-    steeringSpeed: 8.8,
+    steeringSpeed: 7.6,
     assists: {
-      yawDamping: 0.12,
-      driftGripMultiplier: 0.26,
+      yawDamping: 0.18,
+      driftGripMultiplier: 0.56,
     },
   },
   aerodynamics: {
@@ -53,11 +51,11 @@ export const VORTEX_B_VEHICLE_CONFIG: VehicleConfig = {
       // Front-left
       position: [-0.88, -0.2, 1.13],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.24,
-      suspensionStiffness: 40,
-      suspensionDamping: 5.2,
-      maxSuspensionForce: 10200,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.22,
+      suspensionStiffness: 22,
+      suspensionDamping: 2.8,
+      maxSuspensionForce: 9500,
       steerable: true,
       powered: true,
     },
@@ -65,11 +63,11 @@ export const VORTEX_B_VEHICLE_CONFIG: VehicleConfig = {
       // Front-right
       position: [0.88, -0.2, 1.13],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.24,
-      suspensionStiffness: 40,
-      suspensionDamping: 5.2,
-      maxSuspensionForce: 10200,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.22,
+      suspensionStiffness: 22,
+      suspensionDamping: 2.8,
+      maxSuspensionForce: 9500,
       steerable: true,
       powered: true,
     },
@@ -77,11 +75,11 @@ export const VORTEX_B_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-left
       position: [-0.90, -0.2, -1.05],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.24,
-      suspensionStiffness: 42,
-      suspensionDamping: 5.4,
-      maxSuspensionForce: 10800,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.22,
+      suspensionStiffness: 21,
+      suspensionDamping: 3.0,
+      maxSuspensionForce: 9500,
       steerable: false,
       powered: true,
     },
@@ -89,11 +87,11 @@ export const VORTEX_B_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-right
       position: [0.90, -0.2, -1.05],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.24,
-      suspensionStiffness: 42,
-      suspensionDamping: 5.4,
-      maxSuspensionForce: 10800,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.22,
+      suspensionStiffness: 21,
+      suspensionDamping: 3.0,
+      maxSuspensionForce: 9500,
       steerable: false,
       powered: true,
     },

@@ -8,41 +8,39 @@ import { VEHICLE_PHANTOM_B_MODEL_PATH } from '@/config/assets';
 export const PHANTOM_B_VEHICLE_CONFIG: VehicleConfig = {
   chassisMass: 140,
   chassisSize: [1.9, 0.6, 4.0],
-  weightDistribution: {
-    frontBias: 0.50, // Mid-engine 50/50 balance
-    engineOffsetZ: 0.20,
-    engineOffsetY: -0.16,
-    centerOfMassZ: 0.04,
-  },
   engine: {
-    maxForce: 440,
+    maxForce: 225,
     maxSpeed: 275,
+    engineBrakingForce: 130, // Sharp Group B compression braking
   },
   drivetrain: {
     frontBias: 0.48, // 48/52 Rear-biased AWD
+    frontPower: 210,
+    rearPower: 225,
+    slideFrontPowerBoost: 110,
   },
   brakes: {
-    maxForce: 19,
-    handbrakeForce: 72,
-    frontBias: 0.52,
+    maxForce: 900,
+    handbrakeForce: 460,
+    frontBias: 0.53,
   },
   suspension: {
-    frontAntiRollBarStiffness: 19.0,
-    rearAntiRollBarStiffness: 22.0,
-    antiSquatStiffness: 36.0,
+    frontAntiRollBarStiffness: 12.0,
+    rearAntiRollBarStiffness: 7.5,
   },
   handling: {
     steeringCurve: [
-      [0, Math.PI / 3.7],
-      [40, Math.PI / 4.4],
-      [90, Math.PI / 6.8],
-      [150, Math.PI / 10.5],
-      [240, Math.PI / 15.5],
+      [0, Math.PI / 4.5],    // ~40.0 degrees at 0 km/h (Group B rally hairpins)
+      [30, Math.PI / 7.2],   // ~25.0 degrees at 30 km/h
+      [60, Math.PI / 11.8],  // ~15.2 degrees at 60 km/h
+      [90, Math.PI / 17.5],  // ~10.3 degrees at 90 km/h
+      [140, Math.PI / 25.5], // ~7.1 degrees at 140 km/h
+      [220, Math.PI / 37.0], // ~4.9 degrees at 220 km/h
     ],
-    steeringSpeed: 8.5,
+    steeringSpeed: 7.4,
     assists: {
-      yawDamping: 0.13,
-      driftGripMultiplier: 0.25,
+      yawDamping: 0.18,
+      driftGripMultiplier: 0.54,
     },
   },
   aerodynamics: {
@@ -53,11 +51,11 @@ export const PHANTOM_B_VEHICLE_CONFIG: VehicleConfig = {
       // Front-left
       position: [-0.89, -0.2, 1.36],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.24,
-      suspensionStiffness: 39,
-      suspensionDamping: 5.0,
-      maxSuspensionForce: 10000,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.21,
+      suspensionStiffness: 23,
+      suspensionDamping: 2.9,
+      maxSuspensionForce: 9500,
       steerable: true,
       powered: true,
     },
@@ -65,11 +63,11 @@ export const PHANTOM_B_VEHICLE_CONFIG: VehicleConfig = {
       // Front-right
       position: [0.89, -0.2, 1.36],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.24,
-      suspensionStiffness: 39,
-      suspensionDamping: 5.0,
-      maxSuspensionForce: 10000,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.21,
+      suspensionStiffness: 23,
+      suspensionDamping: 2.9,
+      maxSuspensionForce: 9500,
       steerable: true,
       powered: true,
     },
@@ -77,11 +75,11 @@ export const PHANTOM_B_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-left
       position: [-0.89, -0.2, -1.38],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.24,
-      suspensionStiffness: 41,
-      suspensionDamping: 5.2,
-      maxSuspensionForce: 10500,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.21,
+      suspensionStiffness: 21,
+      suspensionDamping: 3.1,
+      maxSuspensionForce: 9500,
       steerable: false,
       powered: true,
     },
@@ -89,11 +87,11 @@ export const PHANTOM_B_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-right
       position: [0.89, -0.2, -1.38],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.24,
-      suspensionStiffness: 41,
-      suspensionDamping: 5.2,
-      maxSuspensionForce: 10500,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.21,
+      suspensionStiffness: 21,
+      suspensionDamping: 3.1,
+      maxSuspensionForce: 9500,
       steerable: false,
       powered: true,
     },

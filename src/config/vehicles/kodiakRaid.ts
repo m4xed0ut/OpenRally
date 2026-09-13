@@ -8,41 +8,39 @@ import { VEHICLE_KODIAK_RAID_MODEL_PATH } from '@/config/assets';
 export const KODIAK_RAID_VEHICLE_CONFIG: VehicleConfig = {
   chassisMass: 175,
   chassisSize: [2.0, 0.65, 4.1],
-  weightDistribution: {
-    frontBias: 0.52,
-    engineOffsetZ: 0.85,
-    engineOffsetY: -0.15,
-    centerOfMassZ: 0.05,
-  },
   engine: {
-    maxForce: 450, // Massive low-end crawler and hillclimbing torque
+    maxForce: 245, // Massive low-end torque on 175kg heavy raid chassis
     maxSpeed: 235,
+    engineBrakingForce: 140, // High heavy-chassis raid compression braking
   },
   drivetrain: {
     frontBias: 0.50, // Permanent locked 50/50 AWD
+    frontPower: 240,
+    rearPower: 240,
+    slideFrontPowerBoost: 120, // Authoritative front axle pull out of deep ruts and dunes
   },
   brakes: {
-    maxForce: 22,
-    handbrakeForce: 75,
-    frontBias: 0.55,
+    maxForce: 960, // Heavy-duty competition deceleration
+    handbrakeForce: 480, // Firm rear lockup
+    frontBias: 0.58,
   },
   suspension: {
-    frontAntiRollBarStiffness: 16.0, // Softer ARB allows independent wheel articulation on boulders/ruts
-    rearAntiRollBarStiffness: 17.0,
-    antiSquatStiffness: 32.0,
+    frontAntiRollBarStiffness: 9.0, // Supple ARB allows independent articulation on boulders and ruts
+    rearAntiRollBarStiffness: 5.0,
   },
   handling: {
     steeringCurve: [
-      [0, Math.PI / 4.1],
-      [40, Math.PI / 4.8],
-      [90, Math.PI / 7.2],
-      [150, Math.PI / 11.5],
-      [240, Math.PI / 17.0],
+      [0, Math.PI / 4.7],    // ~38.3 degrees at 0 km/h (heavy raid truck hairpins)
+      [30, Math.PI / 8.0],   // ~22.5 degrees at 30 km/h
+      [60, Math.PI / 13.0],  // ~13.8 degrees at 60 km/h
+      [90, Math.PI / 19.0],  // ~9.5 degrees at 90 km/h
+      [140, Math.PI / 28.0], // ~6.4 degrees at 140 km/h
+      [220, Math.PI / 40.0], // ~4.5 degrees at 220 km/h
     ],
-    steeringSpeed: 7.5,
+    steeringSpeed: 6.5,
     assists: {
-      yawDamping: 0.16,
-      driftGripMultiplier: 0.22,
+      yawDamping: 0.24,
+      driftGripMultiplier: 0.52,
     },
   },
   aerodynamics: {
@@ -53,10 +51,10 @@ export const KODIAK_RAID_VEHICLE_CONFIG: VehicleConfig = {
       // Front-left
       position: [-0.94, -0.15, 1.27],
       radius: 0.34,
-      suspensionRestLength: 0.35,
-      suspensionTravel: 0.28,
-      suspensionStiffness: 38,
-      suspensionDamping: 5.5,
+      suspensionRestLength: 0.39,
+      suspensionTravel: 0.26,
+      suspensionStiffness: 24,
+      suspensionDamping: 3.2,
       maxSuspensionForce: 12500,
       steerable: true,
       powered: true,
@@ -65,10 +63,10 @@ export const KODIAK_RAID_VEHICLE_CONFIG: VehicleConfig = {
       // Front-right
       position: [0.94, -0.15, 1.27],
       radius: 0.34,
-      suspensionRestLength: 0.35,
-      suspensionTravel: 0.28,
-      suspensionStiffness: 38,
-      suspensionDamping: 5.5,
+      suspensionRestLength: 0.39,
+      suspensionTravel: 0.26,
+      suspensionStiffness: 24,
+      suspensionDamping: 3.2,
       maxSuspensionForce: 12500,
       steerable: true,
       powered: true,
@@ -77,10 +75,10 @@ export const KODIAK_RAID_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-left
       position: [-0.95, -0.15, -1.39],
       radius: 0.34,
-      suspensionRestLength: 0.35,
-      suspensionTravel: 0.28,
-      suspensionStiffness: 38,
-      suspensionDamping: 5.5,
+      suspensionRestLength: 0.39,
+      suspensionTravel: 0.26,
+      suspensionStiffness: 22,
+      suspensionDamping: 3.4,
       maxSuspensionForce: 12500,
       steerable: false,
       powered: true,
@@ -89,10 +87,10 @@ export const KODIAK_RAID_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-right
       position: [0.95, -0.15, -1.39],
       radius: 0.34,
-      suspensionRestLength: 0.35,
-      suspensionTravel: 0.28,
-      suspensionStiffness: 38,
-      suspensionDamping: 5.5,
+      suspensionRestLength: 0.39,
+      suspensionTravel: 0.26,
+      suspensionStiffness: 22,
+      suspensionDamping: 3.4,
       maxSuspensionForce: 12500,
       steerable: false,
       powered: true,

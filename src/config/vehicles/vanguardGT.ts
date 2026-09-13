@@ -8,41 +8,39 @@ import { VEHICLE_VANGUARD_GT_MODEL_PATH } from '@/config/assets';
 export const VANGUARD_GT_VEHICLE_CONFIG: VehicleConfig = {
   chassisMass: 155,
   chassisSize: [1.9, 0.6, 4.2],
-  weightDistribution: {
-    frontBias: 0.54,
-    engineOffsetZ: 0.90,
-    engineOffsetY: -0.18,
-    centerOfMassZ: 0.08,
-  },
   engine: {
-    maxForce: 430,
+    maxForce: 230,
     maxSpeed: 280,
+    engineBrakingForce: 110, // Progressive GT sports engine braking
   },
   drivetrain: {
-    frontBias: 0.35, // 35/65 RWD-biased AWD for exhilarating sports GT dynamics
+    frontBias: 0.40, // 40/60 RWD-biased AWD for exhilarating sports GT dynamics
+    frontPower: 185,
+    rearPower: 235,
+    slideFrontPowerBoost: 95,
   },
   brakes: {
-    maxForce: 20,
-    handbrakeForce: 72,
+    maxForce: 920,
+    handbrakeForce: 460,
     frontBias: 0.56,
   },
   suspension: {
-    frontAntiRollBarStiffness: 21.0,
-    rearAntiRollBarStiffness: 21.0,
-    antiSquatStiffness: 35.0,
+    frontAntiRollBarStiffness: 13.5,
+    rearAntiRollBarStiffness: 8.5,
   },
   handling: {
     steeringCurve: [
-      [0, Math.PI / 4.0],
-      [40, Math.PI / 4.8],
-      [90, Math.PI / 7.5],
-      [150, Math.PI / 12.0],
-      [240, Math.PI / 17.5],
+      [0, Math.PI / 4.7],    // ~38.3 degrees at 0 km/h (sports GT coupe hairpins)
+      [30, Math.PI / 7.8],   // ~23.1 degrees at 30 km/h
+      [60, Math.PI / 12.5],  // ~14.4 degrees at 60 km/h
+      [90, Math.PI / 18.5],  // ~9.7 degrees at 90 km/h
+      [140, Math.PI / 27.0], // ~6.7 degrees at 140 km/h
+      [220, Math.PI / 39.0], // ~4.6 degrees at 220 km/h
     ],
-    steeringSpeed: 7.8,
+    steeringSpeed: 6.8,
     assists: {
-      yawDamping: 0.14,
-      driftGripMultiplier: 0.22,
+      yawDamping: 0.22,
+      driftGripMultiplier: 0.50,
     },
   },
   aerodynamics: {
@@ -53,11 +51,11 @@ export const VANGUARD_GT_VEHICLE_CONFIG: VehicleConfig = {
       // Front-left
       position: [-0.92, -0.2, 1.25],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.23,
-      suspensionStiffness: 41,
-      suspensionDamping: 5.2,
-      maxSuspensionForce: 10500,
+      suspensionRestLength: 0.34,
+      suspensionTravel: 0.21,
+      suspensionStiffness: 24,
+      suspensionDamping: 3.0,
+      maxSuspensionForce: 9800,
       steerable: true,
       powered: true,
     },
@@ -65,11 +63,11 @@ export const VANGUARD_GT_VEHICLE_CONFIG: VehicleConfig = {
       // Front-right
       position: [0.92, -0.2, 1.25],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.23,
-      suspensionStiffness: 41,
-      suspensionDamping: 5.2,
-      maxSuspensionForce: 10500,
+      suspensionRestLength: 0.34,
+      suspensionTravel: 0.21,
+      suspensionStiffness: 24,
+      suspensionDamping: 3.0,
+      maxSuspensionForce: 9800,
       steerable: true,
       powered: true,
     },
@@ -77,11 +75,11 @@ export const VANGUARD_GT_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-left (wide rear track)
       position: [-1.02, -0.2, -1.38],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.23,
-      suspensionStiffness: 41,
-      suspensionDamping: 5.2,
-      maxSuspensionForce: 10500,
+      suspensionRestLength: 0.34,
+      suspensionTravel: 0.21,
+      suspensionStiffness: 23,
+      suspensionDamping: 3.2,
+      maxSuspensionForce: 9800,
       steerable: false,
       powered: true,
     },
@@ -89,11 +87,11 @@ export const VANGUARD_GT_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-right (wide rear track)
       position: [1.02, -0.2, -1.38],
       radius: 0.32,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.23,
-      suspensionStiffness: 41,
-      suspensionDamping: 5.2,
-      maxSuspensionForce: 10500,
+      suspensionRestLength: 0.34,
+      suspensionTravel: 0.21,
+      suspensionStiffness: 23,
+      suspensionDamping: 3.2,
+      maxSuspensionForce: 9800,
       steerable: false,
       powered: true,
     },
