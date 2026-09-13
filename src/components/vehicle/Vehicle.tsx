@@ -21,6 +21,8 @@ import { useMultiplayerStore } from '@/store/multiplayerStore';
 import { useTagStore } from '@/store/tagStore';
 import { getVehiclePreset } from '@/config/vehicleRegistry';
 import { useTerrainData } from '@/components/terrain/TerrainContext';
+import { getInterpolatedHeight } from '@/utils/terrainCompiler';
+import { getVehicleRestingHeight } from '@/utils/physics/suspension';
 import { isMobileDevice } from '@/utils/device';
 
 interface VehicleVisualModelProps {
@@ -131,7 +133,7 @@ function VehicleVisualModel({
 export function Vehicle() {
   const selectedVehicleId = useGameStore((s) => s.selectedVehicleId);
   const vehiclePreset = getVehiclePreset(selectedVehicleId);
-  const { levelPreset } = useTerrainData();
+  const { levelPreset, heightmapData, levelData } = useTerrainData();
 
   const isMobile = isMobileDevice();
   const graphicsQuality = useSettingsStore((s) => s.graphicsQuality);
@@ -187,11 +189,24 @@ export function Vehicle() {
     // Rotate offsets by track spawn heading so cars align perfectly on any starting grid
     const cosY = Math.cos(spawnRotY);
     const sinY = Math.sin(spawnRotY);
-    effectiveSpawnPos = [
-      spawnPos[0] + cosY * lateralOffset + sinY * longitudinalOffset,
-      spawnPos[1],
-      spawnPos[2] - sinY * lateralOffset + cosY * longitudinalOffset,
-    ];
+    const spawnX = spawnPos[0] + cosY * lateralOffset + sinY * longitudinalOffset;
+    const spawnZ = spawnPos[2] - sinY * lateralOffset + cosY * longitudinalOffset;
+    let spawnY = spawnPos[1];
+    if (heightmapData && levelData) {
+      const groundY = getInterpolatedHeight(
+        spawnX,
+        spawnZ,
+        heightmapData.heights,
+        heightmapData.rows,
+        heightmapData.cols,
+        levelData.terrainBase.width,
+        levelData.terrainBase.depth,
+      );
+      if (Number.isFinite(groundY)) {
+        spawnY = groundY + getVehicleRestingHeight(config);
+      }
+    }
+    effectiveSpawnPos = [spawnX, spawnY, spawnZ];
   }
 
   return (
@@ -203,25 +218,22 @@ export function Vehicle() {
         mass={config.chassisMass}
         position={effectiveSpawnPos}
         rotation={[0, effectiveSpawnRotY, 0]}
-        linearDamping={0.15}
+        linearDamping={0.02}
         angularDamping={2.2}
         canSleep={false}
         ccd={true}
       >
-        {/* Chassis collider: Balanced front engine weight distribution (~53% front bias, CoM Z = +0.08m) */}
-        {/* Eliminates nose-heavy sluggishness while completely preventing wheelies under full throttle */}
+        {/* Chassis collider - low friction to slide smoothly over terrain/props without snagging */}
         <CuboidCollider
           key={selectedVehicleId}
-          position={[
-            0,
-            config.weightDistribution?.engineOffsetY ?? -0.16,
-            config.weightDistribution?.centerOfMassZ ?? 0.08,
-          ]}
+          position={[0, 0.12, 0]}
           args={[
-            config.chassisSize[0] / 2,
-            config.chassisSize[1] / 2,
-            config.chassisSize[2] / 2,
+            (config.chassisSize[0] / 2) * 0.85,
+            0.18,
+            (config.chassisSize[2] / 2) * 0.85,
           ]}
+          friction={0.0}
+          restitution={0.0}
           mass={config.chassisMass}
         />
 
