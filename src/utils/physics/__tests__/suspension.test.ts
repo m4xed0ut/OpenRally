@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { applyAntiRollBars, applyPitchStabilization } from '../suspension';
+import { applyAntiRollBars, applyPitchStabilization, getVehicleRestingHeight } from '../suspension';
 import { DEFAULT_VEHICLE_CONFIG } from '@/config/vehicle';
 import { WRC_VEHICLE_CONFIG } from '@/config/vehicleRegistry';
 import type { RapierRigidBody } from '@react-three/rapier';
@@ -105,5 +105,15 @@ describe('suspension physics (Anti-Roll & Pitch Stabilization)', () => {
     expect(body.applyTorqueImpulse).toHaveBeenCalled();
     // Strong positive restoring torque applied to plant front axle
     expect(body.appliedTorques[0].x).toBeGreaterThan(10 * 0.016);
+  });
+
+  it('computes accurate physical resting height for vehicle presets', () => {
+    const heightDefault = getVehicleRestingHeight(DEFAULT_VEHICLE_CONFIG);
+    expect(heightDefault).toBeGreaterThan(0.70);
+    expect(heightDefault).toBeLessThan(0.95);
+
+    const heightWrc = getVehicleRestingHeight(WRC_VEHICLE_CONFIG);
+    expect(heightWrc).toBeGreaterThan(0.70);
+    expect(heightWrc).toBeLessThan(0.95);
   });
 });
