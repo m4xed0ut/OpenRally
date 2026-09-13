@@ -32,6 +32,14 @@ export interface EngineConfig {
   readonly maxForce: number;
   /** Maximum speed in km/h (for HUD / limiter) */
   readonly maxSpeed: number;
+  /** Optional front axle maximum force */
+  readonly frontMaxForce?: number;
+  /** Optional rear axle maximum force */
+  readonly rearMaxForce?: number;
+  /** Optional slide front power boost */
+  readonly slideFrontPowerBoost?: number;
+  /** Optional engine braking force applied when off-throttle (N per powered wheel, defaults to 120N) */
+  readonly engineBrakingForce?: number;
 }
 
 /**
@@ -52,6 +60,12 @@ export interface BrakesConfig {
 export interface DrivetrainConfig {
   /** Torque bias towards the front (0.0 = 100% rear-wheel drive, 1.0 = 100% front-wheel drive, 0.5 = 50/50 AWD) */
   readonly frontBias: number;
+  /** Optional separate front axle power (force in N) */
+  readonly frontPower?: number;
+  /** Optional separate rear axle power (force in N) */
+  readonly rearPower?: number;
+  /** Additional power given to the front axle whenever the car gets into a slide (N) */
+  readonly slideFrontPowerBoost?: number;
 }
 
 /**
