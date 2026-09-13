@@ -32,10 +32,22 @@ export function validateVehicleConfig(config: VehicleConfig): ValidationResult {
   if (!config.engine || config.engine.maxSpeed <= 0) {
     errors.push(`Invalid engine.maxSpeed: ${config.engine?.maxSpeed}. Must be > 0.`);
   }
+  if (config.engine?.engineBrakingForce !== undefined && config.engine.engineBrakingForce < 0) {
+    errors.push(`Invalid engine.engineBrakingForce: ${config.engine.engineBrakingForce}. Must be >= 0.`);
+  }
 
   // Drivetrain checks
   if (!config.drivetrain || config.drivetrain.frontBias < 0 || config.drivetrain.frontBias > 1) {
     errors.push(`Invalid drivetrain.frontBias: ${config.drivetrain?.frontBias}. Must be between 0.0 and 1.0.`);
+  }
+  if (config.drivetrain?.frontPower !== undefined && config.drivetrain.frontPower <= 0) {
+    errors.push(`Invalid drivetrain.frontPower: ${config.drivetrain.frontPower}. Must be > 0.`);
+  }
+  if (config.drivetrain?.rearPower !== undefined && config.drivetrain.rearPower <= 0) {
+    errors.push(`Invalid drivetrain.rearPower: ${config.drivetrain.rearPower}. Must be > 0.`);
+  }
+  if (config.drivetrain?.slideFrontPowerBoost !== undefined && config.drivetrain.slideFrontPowerBoost < 0) {
+    errors.push(`Invalid drivetrain.slideFrontPowerBoost: ${config.drivetrain.slideFrontPowerBoost}. Must be >= 0.`);
   }
 
   // Brakes checks
