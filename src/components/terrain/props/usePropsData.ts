@@ -188,7 +188,12 @@ export function categorizeProps(
       finalY = originalY !== 0 ? originalY : Math.max(leftY, rightY);
     } else if (prop.type === 'standing_stone' || prop.type === 'stone_cairn') {
       finalY = (originalY !== 0 ? originalY : terrainY) - 0.3;
-    } else if (prop.type === 'hay_bale') {
+    } else if (
+      prop.type === 'hay_bale' ||
+      prop.type === 'jump_ramp' ||
+      prop.type === 'shipping_container' ||
+      prop.type === 'drift_pylon'
+    ) {
       finalY = (originalY !== 0 ? originalY : terrainY);
     } else if (prop.type === 'rally_sign') {
       finalY = (originalY !== 0 ? originalY : terrainY) - 0.1;
