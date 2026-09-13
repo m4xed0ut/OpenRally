@@ -1,8 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useRapier } from '@react-three/rapier';
 import type { RapierRigidBody } from '@react-three/rapier';
-import { Vector3, Quaternion, Euler, Object3D } from 'three';
+import { Vector3, Quaternion, Euler, type Object3D } from 'three';
 import type { VehicleConfig, SurfaceType } from '@/types/vehicle';
 import type { GameState, InputState } from '@/types/game';
 import { useInputUpdater } from '@/hooks/useInput';
@@ -14,76 +13,81 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
 import { networkClient } from '@/network/networkClient';
 import { getAllRemoteVehicleMeshes } from '@/components/vehicle/remoteVehicleRegistry';
-import { DEFAULT_VEHICLE_CONFIG, MS_TO_KMH, MAX_DELTA } from '@/config/vehicle';
+import { DEFAULT_VEHICLE_CONFIG, MAX_DELTA } from '@/config/vehicle';
 import { updateGearbox, handleManualGearShift, calculateRPM } from '@/utils/physics/powertrain';
-import { applyDrivetrain, applyAwdDriftPropulsion } from '@/utils/physics/drivetrain';
-import { applyTireFrictionAndBrakes } from '@/utils/physics/tires';
 import { applyAerodynamics } from '@/utils/physics/aerodynamics';
-import { applyAssists } from '@/utils/physics/assists';
 import { syncWheelVisuals } from '@/utils/physics/visuals';
-import { applyAntiRollBars } from '@/utils/physics/suspension';
 import { emitGameEvent } from '@/utils/events';
 import { getSurfaceDefinition } from '@/config/surfaceRegistry';
 import { useTerrainData } from '@/components/terrain/TerrainContext';
-import { rumbleImpact, rumbleSlip, rumbleSurface } from '@/utils/input/gamepadHaptics';
+import { rumbleImpact, rumbleSlip, rumbleSurface, stopGamepadRumble } from '@/utils/input/gamepadHaptics';
+import { PacejkaVehicleSolver } from '@/utils/physics/pacejkaSolver';
+import { getInterpolatedHeight } from '@/utils/terrainCompiler';
+import { getElevatedStructureHeight } from '@/utils/physics/elevatedStructures';
+import { getVehicleRestingHeight } from '@/utils/physics/suspension';
 
-// ─── Reusable Three.js objects (avoids per-frame GC pressure) ────────
+// ─── Pre-allocated scratch instances (Zero GC in hot frame loop) ──────
+const _zeroVel = { x: 0, y: 0, z: 0 };
+const _quat = new Quaternion();
 const _forward = new Vector3();
 const _right = new Vector3();
+const _up = new Vector3();
 const _velocity = new Vector3();
-const _dragImpulse = new Vector3();
-const _quat = new Quaternion();
 const _euler = new Euler();
-const _spawnQuat = new Quaternion();
-const _spawnEuler = new Euler();
 const _posTuple: [number, number, number] = [0, 0, 0];
+const _spawnEuler = new Euler();
+const _spawnQuat = new Quaternion();
 const _settledPos = { x: 0, y: 0, z: 0 };
 const _settledRot = { x: 0, y: 0, z: 0, w: 1 };
-const _settledSuspensions: number[] = [0, 0, 0, 0];
-const _zeroVel = { x: 0, y: 0, z: 0 };
+const _settledSuspensions: number[] = [0.25, 0.25, 0.25, 0.25];
+
 const _frozenInput: InputState = {
   steering: 0,
   throttle: 0,
-  brake: 1,
+  brake: 0,
   handbrake: true,
   cameraToggle: false,
   reset: false,
+  gearUp: false,
+  gearDown: false,
 };
+
 const _telemetryState = {
   speed: 0,
   lateralSpeed: 0,
   slipAngle: 0,
-  rpm: 0,
+  rpm: 1000,
   gear: 1,
   heading: 0,
   position: _posTuple,
-  tireGrips: [1, 1, 1, 1] as number[],
+  tireGrips: [1, 1, 1, 1] as [number, number, number, number],
   surface: 'tarmac' as SurfaceType,
   isAirborne: false,
 };
 
 /**
- * Vehicle physics hook using Rapier's DynamicRayCastVehicleController.
- * Handles engine force, steering, braking, and handbrake.
- *
- * @param chassisRef - Ref to the chassis RigidBody
- * @param wheelRefs - Array of refs to visual wheel Object3Ds
- * @param config - Vehicle configuration (defaults to DEFAULT_VEHICLE_CONFIG)
+ * Custom hook orchestrating full vehicle physics via Dual-Track Pacejka Vehicle Dynamics Solver.
+ * Handles powertrain, tire friction curves, suspension kinematics, aerodynamic downforce,
+ * pause momentum preservation, multiplayer telemetry broadcasting, and gamepad haptics.
  */
 export function useVehiclePhysics(
   chassisRef: React.RefObject<RapierRigidBody | null>,
   wheelRefs: React.RefObject<(Object3D | null)[]>,
-  config: VehicleConfig = DEFAULT_VEHICLE_CONFIG,
-): void {
-  const { world, rapier } = useRapier();
-  const { heightmapData, levelData, levelPreset } = useTerrainData();
-  const prevGearRef = useRef<number>(1);
+  config: VehicleConfig = DEFAULT_VEHICLE_CONFIG
+) {
+  const getInput = useInputUpdater();
+  const { levelPreset, heightmapData, levelData } = useTerrainData();
+
+  const solverRef = useRef<PacejkaVehicleSolver | null>(null);
   const prevSurfaceRef = useRef<SurfaceType>('tarmac');
-  const prevSpeedKmhRef = useRef<number>(0);
   const currentRpmRef = useRef<number>(1000);
+  const prevSpeedKmhRef = useRef<number>(0);
+  const prevGearRef = useRef<number>(1);
   const isAirborneRef = useRef<boolean>(false);
+  const airborneTimeRef = useRef<number>(0);
   const settleFramesRef = useRef<number>(0);
   const isSettledRef = useRef<boolean>(false);
+
   const pausedStateRef = useRef<{
     linvel: { x: number; y: number; z: number };
     angvel: { x: number; y: number; z: number };
@@ -96,167 +100,91 @@ export function useVehiclePhysics(
   } | null>(null);
   const isPausedRef = useRef<boolean>(false);
   const prevGameStateRef = useRef<GameState>(useGameStore.getState().gameState);
-  const vehicleControllerRef = useRef<InstanceType<
-    typeof rapier.DynamicRayCastVehicleController
-  > | null>(null);
-  const getInput = useInputUpdater();
 
-  // Safely dispose the active vehicle controller without throwing WASM errors
-  const disposeController = () => {
-    if (vehicleControllerRef.current) {
-      try {
-        world.removeVehicleController(vehicleControllerRef.current);
-      } catch (err) {
-        console.warn('[useVehiclePhysics] Suppressed removeVehicleController error:', err);
-      }
-      vehicleControllerRef.current = null;
-    }
-  };
-
-  // Idempotently configure and attach the vehicle controller to a valid rigid body
-  const setupController = (body: RapierRigidBody) => {
-    if (typeof body.isValid === 'function' && !body.isValid()) return;
-    disposeController();
-
-    try {
-      const controller = world.createVehicleController(body);
-
-      // Add wheels
-      config.wheels.forEach((wheel) => {
-        controller.addWheel(
-          // connection point (chassis-local)
-          { x: wheel.position[0], y: wheel.position[1], z: wheel.position[2] },
-          // suspension direction (downward)
-          { x: 0, y: -1, z: 0 },
-          // axle direction (lateral)
-          { x: -1, y: 0, z: 0 },
-          // suspension rest length
-          wheel.suspensionRestLength,
-          // wheel radius
-          wheel.radius,
-        );
-      });
-
-      // Configure suspension for each wheel
-      for (let i = 0; i < config.wheels.length; i++) {
-        const wheel = config.wheels[i];
-        controller.setWheelSuspensionStiffness(i, wheel.suspensionStiffness);
-        controller.setWheelMaxSuspensionTravel(i, wheel.suspensionTravel);
-        controller.setWheelSuspensionCompression(i, wheel.suspensionDamping * 0.8);
-        controller.setWheelSuspensionRelaxation(i, wheel.suspensionDamping);
-        controller.setWheelMaxSuspensionForce(i, wheel.maxSuspensionForce ?? 12000);
-      }
-
-      vehicleControllerRef.current = controller;
-    } catch (err) {
-      console.error('[useVehiclePhysics] Error setting up vehicle controller:', err);
-    }
-  };
-
-  // Initialize and synchronize the vehicle controller when preset or level changes
+  // Initialize or re-create solver when config or level changes
   useEffect(() => {
+    solverRef.current = new PacejkaVehicleSolver(config);
     settleFramesRef.current = 0;
     isSettledRef.current = false;
     currentRpmRef.current = 1000;
     isAirborneRef.current = false;
+    airborneTimeRef.current = 0;
     pausedStateRef.current = null;
     isPausedRef.current = false;
-
-    const body = chassisRef.current;
-    if (body && (typeof body.isValid !== 'function' || body.isValid())) {
-      setupController(body);
-    }
-
-    return () => {
-      disposeController();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, levelPreset.id]);
 
-  // Frame update: apply forces, read state
+  // Frame update: apply forces, update solver, sync visuals, broadcast telemetry
   useFrame((_, delta) => {
     const gameState = useGameStore.getState().gameState;
     const prevGameState = prevGameStateRef.current;
     prevGameStateRef.current = gameState;
 
-    const isEnteringMenu =
-      (prevGameState === 'playing' || prevGameState === 'paused') &&
-      (gameState === 'menu' || gameState === 'title');
-    const isMenuOrTitle = gameState === 'menu' || gameState === 'title';
-
     const body = chassisRef.current;
     if (!body || (typeof body.isValid === 'function' && !body.isValid())) return;
 
-    if (!vehicleControllerRef.current) {
-      setupController(body);
-      if (!vehicleControllerRef.current) return;
+    if (!solverRef.current) {
+      solverRef.current = new PacejkaVehicleSolver(config);
     }
+    const solver = solverRef.current;
 
-    const controller = vehicleControllerRef.current;
-
-    // Settle vehicle physics on ground before dismissing loading screen
-    if (!useGameStore.getState().isSceneReady) {
-      settleFramesRef.current += 1;
-      if (settleFramesRef.current >= 15) {
-        useGameStore.getState().setSceneReady(true);
-        networkClient.sendClientReady();
-      }
-    }
-
-    // --- CHECK PENDING RESET FOR ALL STATES (PLAYING, LOADING, PAUSED, MENU) ---
-    const resetState = useGameStore.getState();
-    const tagStoreState = useTagStore.getState();
-    let spawnPos = levelPreset.spawnPosition;
-    let spawnRotY = levelPreset.spawnRotationY;
-    if (resetState.gameMode === 'tag' && levelPreset.tagSpawnPoints && levelPreset.tagSpawnPoints.length > 0) {
-      const spIndex = tagStoreState.assignedSpawnIndex % levelPreset.tagSpawnPoints.length;
-      const pt = levelPreset.tagSpawnPoints[spIndex];
-      spawnPos = pt.position;
-      spawnRotY = pt.rotationY;
-    }
-    const fallResetY = levelPreset.fallResetY;
+    // ─── STABILITY GUARD & OUT-OF-BOUNDS SANITY CHECK ───
     const currentBodyPos = body.translation();
-    const curLinvel = body.linvel();
-    const curAngvel = body.angvel();
-
-    // Menu out-of-bounds guard: vehicle in menu/title must stay strictly near spawn and above water
-    const distFromSpawnSq =
-      (currentBodyPos.x - spawnPos[0]) ** 2 +
-      (currentBodyPos.z - spawnPos[2]) ** 2;
-    const isMenuOutOfBounds =
-      isMenuOrTitle &&
-      (distFromSpawnSq > 100 || currentBodyPos.y < -1.0 || currentBodyPos.y > spawnPos[1] + 10.0);
-
-    // Numerical sanity guard: detect NaN or infinite values produced by extreme collisions or solver instability
     const isCorrupted =
       !Number.isFinite(currentBodyPos.x) ||
       !Number.isFinite(currentBodyPos.y) ||
       !Number.isFinite(currentBodyPos.z) ||
-      !Number.isFinite(curLinvel.x) ||
-      !Number.isFinite(curLinvel.y) ||
-      !Number.isFinite(curLinvel.z) ||
-      !Number.isFinite(curAngvel.x) ||
-      !Number.isFinite(curAngvel.y) ||
-      !Number.isFinite(curAngvel.z);
+      Math.abs(currentBodyPos.x) > 5000 ||
+      Math.abs(currentBodyPos.y) > 5000 ||
+      Math.abs(currentBodyPos.z) > 5000;
+
+    const isEnteringMenu =
+      (prevGameState === 'playing' || prevGameState === 'paused') &&
+      (gameState === 'menu' || gameState === 'title');
+    const isMenuOrTitle = gameState === 'menu' || gameState === 'title';
+    const isMenuOutOfBounds = isMenuOrTitle && currentBodyPos.y < -1.0;
+
+    const resetState = useGameStore.getState();
+    const spawnPos = levelPreset.spawnPosition;
+    const spawnRotY = levelPreset.spawnRotationY;
+    const fallResetY = levelPreset.fallResetY;
 
     if (
-      isEnteringMenu ||
-      isMenuOutOfBounds ||
       isCorrupted ||
       currentBodyPos.y < fallResetY ||
+      isMenuOutOfBounds ||
+      (isEnteringMenu && !isSettledRef.current) ||
       resetState.pendingReset
     ) {
-      body.setTranslation({ x: spawnPos[0], y: spawnPos[1], z: spawnPos[2] }, true);
+      let spawnY = spawnPos[1];
+      if (heightmapData && levelData) {
+        const groundY = getInterpolatedHeight(
+          spawnPos[0],
+          spawnPos[2],
+          heightmapData.heights,
+          heightmapData.rows,
+          heightmapData.cols,
+          levelData.terrainBase.width,
+          levelData.terrainBase.depth,
+        );
+        if (Number.isFinite(groundY)) {
+          // Resting height: chassis sits above terrain when suspension is at normal weight sag
+          spawnY = groundY + getVehicleRestingHeight(config);
+        }
+      }
+      body.setTranslation({ x: spawnPos[0], y: spawnY, z: spawnPos[2] }, true);
 
       _spawnEuler.set(0, spawnRotY, 0);
       _spawnQuat.setFromEuler(_spawnEuler);
       body.setRotation({ x: _spawnQuat.x, y: _spawnQuat.y, z: _spawnQuat.z, w: _spawnQuat.w }, true);
 
-      body.setLinvel({ x: 0, y: 0, z: 0 }, true);
-      body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      body.setLinvel(_zeroVel, true);
+      body.setAngvel(_zeroVel, true);
 
+      solver.resetSuspensionHistory();
       currentRpmRef.current = 1000;
       isAirborneRef.current = false;
+      airborneTimeRef.current = 0;
+      stopGamepadRumble(true);
       settleFramesRef.current = 0;
       isSettledRef.current = false;
       pausedStateRef.current = null;
@@ -265,11 +193,9 @@ export function useVehiclePhysics(
       emitGameEvent('vehicle_reset', {
         reason: isCorrupted
           ? 'stability_guard'
-          : (currentBodyPos.y < fallResetY || isMenuOutOfBounds)
+          : currentBodyPos.y < fallResetY || isMenuOutOfBounds
             ? 'out_of_bounds'
-            : isEnteringMenu
-              ? 'manual'
-              : 'manual',
+            : 'manual',
       });
 
       if (resetState.pendingReset) {
@@ -288,7 +214,6 @@ export function useVehiclePhysics(
     // ─── 0. PAUSE STATE HANDLING (FREEZE & RESTORE IDENTICAL PRE-PAUSE MOMENTUM) ───
     if (gameState === 'paused') {
       if (!isPausedRef.current) {
-        // First frame entering pause: capture the exact simulation state
         const curLinvel = body.linvel();
         const curAngvel = body.angvel();
         const curPos = body.translation();
@@ -307,8 +232,6 @@ export function useVehiclePhysics(
         isPausedRef.current = true;
       }
 
-      // While paused: keep the vehicle solidly stationary at paused coordinates
-      // Do NOT apply braking forces or step vehicle controller to avoid altering wheel/suspension physics!
       if (pausedStateRef.current) {
         body.setTranslation(pausedStateRef.current.pos, true);
         body.setRotation(pausedStateRef.current.rot, true);
@@ -349,7 +272,6 @@ export function useVehiclePhysics(
 
       // 1. If already settled in menu: keep vehicle 100% frozen, solid, and motionless
       if (isSettledRef.current) {
-        // Guard against any corrupted settled position in menu
         const settledDistSq =
           (_settledPos.x - spawnPos[0]) ** 2 + (_settledPos.z - spawnPos[2]) ** 2;
         if (isMenuOrTitle && (settledDistSq > 100 || _settledPos.y < -1.0)) {
@@ -372,7 +294,7 @@ export function useVehiclePhysics(
           for (let i = 0; i < config.wheels.length; i++) {
             const wheelObj = wheels[i];
             if (!wheelObj) continue;
-            const connection = controller.wheelChassisConnectionPointCs(i);
+            const connection = solver.wheelChassisConnectionPointCs(i);
             const suspension = _settledSuspensions[i] ?? (config.wheels[i].suspensionRestLength * 0.7);
             if (connection != null) {
               wheelObj.position.set(connection.x, connection.y - suspension, connection.z);
@@ -385,14 +307,10 @@ export function useVehiclePhysics(
 
       // 2. Settle & landing phase (first ~40 frames after spawn):
       settleFramesRef.current += 1;
-      for (let i = 0; i < config.wheels.length; i++) {
-        controller.setWheelBrake(i, 3000);
-        controller.setWheelEngineForce(i, 0);
-      }
-      controller.updateVehicle(delta);
-      syncWheelVisuals(controller, wheelRefs, config, 0, delta, 1000, 1);
+      const safeDt = Math.min(delta, MAX_DELTA);
+      solver.update(body, _frozenInput, safeDt, 1, heightmapData, levelData);
+      syncWheelVisuals(solver, wheelRefs, config, 0, safeDt, 1000, 1);
 
-      // Check if vehicle has touched ground and vertical velocity has stabilized
       const currentLinvel = body.linvel();
       const p = body.translation();
       const isNearSpawn =
@@ -414,7 +332,7 @@ export function useVehiclePhysics(
         _settledRot.z = r.z;
         _settledRot.w = r.w;
         for (let i = 0; i < config.wheels.length; i++) {
-          _settledSuspensions[i] = controller.wheelSuspensionLength(i) ?? (config.wheels[i].suspensionRestLength * 0.7);
+          _settledSuspensions[i] = solver.wheelSuspensionLength(i) ?? (config.wheels[i].suspensionRestLength * 0.7);
         }
         isSettledRef.current = true;
         body.setLinvel(_zeroVel, true);
@@ -436,35 +354,77 @@ export function useVehiclePhysics(
       isSettledRef.current = false;
     }
 
+    // Freeze vehicle completely if player is in multiplayer spectator mode
+    const isSpectating = useMultiplayerStore.getState().isSpectating;
+    if (isSpectating) {
+      body.setLinvel(_zeroVel, true);
+      body.setAngvel(_zeroVel, true);
+      return;
+    }
+
+    if (delta > 0.06) {
+      solver.resetSuspensionHistory();
+    }
+
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 1 / 60;
     const dt = Math.max(0.001, Math.min(safeDelta, MAX_DELTA));
     const input = getInput(dt);
 
-    // Calculate current speed (m/s → km/h)
     const linvel = body.linvel();
     const pos = body.translation();
+    const rot = body.rotation();
 
-    _forward.set(0, 0, 1);
-    _right.set(1, 0, 0); // Local right vector (+X is right in Three.js right-handed coordinates)
-    const bodyQuat = body.rotation();
-    _quat.set(bodyQuat.x, bodyQuat.y, bodyQuat.z, bodyQuat.w);
-    _forward.applyQuaternion(_quat);
-    _right.applyQuaternion(_quat);
-
+    _quat.set(rot.x, rot.y, rot.z, rot.w);
+    _forward.set(0, 0, 1).applyQuaternion(_quat);
+    _right.set(1, 0, 0).applyQuaternion(_quat);
+    _up.set(0, 1, 0).applyQuaternion(_quat);
     _velocity.set(linvel.x, linvel.y, linvel.z);
-    const forwardSpeed = _velocity.dot(_forward); // m/s along forward axis
-    const lateralSpeed = _velocity.dot(_right);   // m/s along lateral axis
-    // Use planar ground speed so cornering/drifting does not cause artificial RPM drop or gear downshift
-    const groundSpeed = Math.hypot(forwardSpeed, lateralSpeed);
-    const speedKmh = groundSpeed * MS_TO_KMH;
-    
-    // Slip angle calculation
-    let slipAngle = 0;
-    if (Math.abs(forwardSpeed) > 1.0) {
-      slipAngle = Math.atan2(lateralSpeed, forwardSpeed);
+
+    // ─── EMERGENCY TERRAIN PENETRATION RECOVERY ───
+    // Non-intrusive fail-safe: ONLY activates if chassis center of mass has
+    // completely tunneled beneath terrain mesh (pos.y < centerGroundY - 0.25m).
+    if (heightmapData && levelData) {
+      const terrainW = levelData.terrainBase.width;
+      const terrainD = levelData.terrainBase.depth;
+      const halfW = terrainW / 2;
+      const halfD = terrainD / 2;
+      const isWithinTerrain = Math.abs(pos.x) < halfW - 3 && Math.abs(pos.z) < halfD - 3;
+
+      if (isWithinTerrain) {
+        let centerGroundY = getInterpolatedHeight(
+          pos.x,
+          pos.z,
+          heightmapData.heights,
+          heightmapData.rows,
+          heightmapData.cols,
+          terrainW,
+          terrainD,
+        );
+        const structCenterY = getElevatedStructureHeight(
+          pos.x,
+          pos.y,
+          pos.z,
+          heightmapData,
+          levelData,
+        );
+        if (structCenterY !== null) {
+          centerGroundY = Math.max(centerGroundY, structCenterY);
+        }
+
+        if (centerGroundY > levelPreset.fallResetY && pos.y < centerGroundY - 0.25) {
+          const recoveryY = centerGroundY + 0.35;
+          body.setTranslation({ x: pos.x, y: recoveryY, z: pos.z }, true);
+          pos.y = recoveryY;
+
+          const curLv = body.linvel();
+          if (curLv.y < 0) {
+            body.setLinvel({ x: curLv.x, y: 1.0, z: curLv.z }, true);
+          }
+        }
+      }
     }
 
-    // Automatic Gearbox Logic
+    // ─── GAME MODES & COUNTDOWN LOGIC ───
     const state = useGameStore.getState();
     const tagState = useTagStore.getState();
 
@@ -473,7 +433,7 @@ export function useVehiclePhysics(
       tagState.tickDelta(dt);
     }
 
-    const isCountingDown = 
+    const isCountingDown =
       (state.gameMode === 'timeattack' && useRacingStore.getState().raceStatus === 'countdown') ||
       (state.gameMode === 'gymkhana_blitz' && useGymkhanaStore.getState().status === 'countdown') ||
       (state.gameMode === 'tag' && tagState.phase === 'countdown');
@@ -481,8 +441,9 @@ export function useVehiclePhysics(
     const isTagFrozen = state.gameMode === 'tag' && tagState.isFrozen;
 
     if (isCountingDown || isTagFrozen) {
-      body.setLinvel({ x: 0, y: Math.min(0, linvel.y), z: 0 }, true);
-      body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      // Hold vehicle stationary on the starting grid while allowing natural vertical suspension settling
+      body.setLinvel({ x: 0, y: linvel.y, z: 0 }, true);
+      body.setAngvel(_zeroVel, true);
     }
 
     const effectiveInput = (isCountingDown || isTagFrozen) ? _frozenInput : input;
@@ -492,25 +453,20 @@ export function useVehiclePhysics(
       (state.gameMode === 'gymkhana_blitz' && useGymkhanaStore.getState().status === 'completed');
 
     if (isGymkhanaFinished) {
-      body.setLinvel({ x: linvel.x * 0.88, y: Math.min(0, linvel.y), z: linvel.z * 0.88 }, true);
-      body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      body.setLinvel({ x: linvel.x * 0.88, y: linvel.y * 0.88, z: linvel.z * 0.88 }, true);
+      const curAngvel = body.angvel();
+      body.setAngvel({ x: curAngvel.x * 0.85, y: curAngvel.y * 0.5, z: curAngvel.z * 0.85 }, true);
     }
 
-    const isSpectating = useMultiplayerStore.getState().isSpectating;
-    if (isSpectating) {
-      body.setLinvel(_zeroVel, true);
-      body.setAngvel(_zeroVel, true);
-      return;
-    }
-
+    // ─── GEARBOX (AUTOMATIC / MANUAL) ───
     const transmissionMode = useSettingsStore.getState().transmissionMode;
     let currentGear: number;
 
     if (transmissionMode === 'manual') {
       currentGear = handleManualGearShift(state.gear, effectiveInput, isAirborneRef.current);
     } else {
-      currentGear = updateGearbox(speedKmh, forwardSpeed, effectiveInput, state.gear, isAirborneRef.current, {
-        slipAngle,
+      currentGear = updateGearbox(solver.speedKmh, solver.forwardSpeed, effectiveInput, state.gear, isAirborneRef.current, {
+        slipAngle: solver.slipAngle,
       });
     }
 
@@ -522,24 +478,11 @@ export function useVehiclePhysics(
       prevGearRef.current = currentGear;
     }
 
-    // --- 1. APPLY DRIVETRAIN (Engine, Reverse, Rev Limiter) ---
+    // ─── 1. ADVANCE DUAL-TRACK PACEJKA VEHICLE DYNAMICS ───
     const powerMultiplier = (state.gameMode === 'tag' && tagState.isTagger) ? 1.5 : 1.0;
-    applyDrivetrain(controller, config, effectiveInput, forwardSpeed, currentGear, slipAngle, speedKmh, powerMultiplier);
+    solver.update(body, effectiveInput, dt, currentGear, heightmapData, levelData, powerMultiplier);
 
-    // --- 2. APPLY TIRE FRICTION & BRAKES ---
-    const { grips: tireGrips, surface } = applyTireFrictionAndBrakes(
-      controller,
-      config,
-      effectiveInput,
-      speedKmh,
-      forwardSpeed,
-      pos.x,
-      pos.y,
-      pos.z,
-      slipAngle,
-      heightmapData,
-      levelData,
-    );
+    const { surface, speedKmh, forwardSpeed, lateralSpeed, slipAngle, groundedRatio, tireGrips } = solver;
 
     if (surface !== prevSurfaceRef.current) {
       emitGameEvent('surface_changed', {
@@ -549,110 +492,82 @@ export function useVehiclePhysics(
       prevSurfaceRef.current = surface;
     }
 
-    // --- 3. APPLY ARCADE ASSISTS ---
-    applyAssists(body, config, effectiveInput, forwardSpeed, dt);
+    const isAirborne = groundedRatio === 0;
+    const wasAirborne = isAirborneRef.current;
+    const flightDuration = airborneTimeRef.current;
 
-    // --- 3.5. APPLY SUSPENSION ARB ---
-    applyAntiRollBars(body, controller, config, dt);
-
-    // --- 4. UPDATE RAPIER VEHICLE ---
-    try {
-      controller.updateVehicle(dt);
-    } catch (simErr) {
-      console.warn('[useVehiclePhysics] Suppressed Rapier vehicle solver exception:', simErr);
-      body.setTranslation({ x: spawnPos[0], y: spawnPos[1], z: spawnPos[2] }, true);
-      body.setLinvel({ x: 0, y: 0, z: 0 }, true);
-      body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-      emitGameEvent('vehicle_reset', { reason: 'stability_guard' });
-      return;
+    if (isAirborne) {
+      airborneTimeRef.current += dt;
+    } else {
+      airborneTimeRef.current = 0;
     }
-
-    // --- 4.1. GROUND CONTACT & AIRBORNE TELEMETRY ---
-    let groundedCount = 0;
-    for (let i = 0; i < config.wheels.length; i++) {
-      if (controller.wheelIsInContact ? controller.wheelIsInContact(i) : true) {
-        groundedCount++;
-      }
-    }
-    const groundedRatio = groundedCount / Math.max(1, config.wheels.length);
-    const isAirborne = groundedCount === 0;
     isAirborneRef.current = isAirborne;
 
-    // --- 4.5. GAMEPAD HAPTIC RUMBLE FEEDBACK ---
+    // Suppress micro-wiggling at standstill or during race countdown
+    if (isCountingDown || isTagFrozen) {
+      const curLv = body.linvel();
+      body.setLinvel({ x: 0, y: curLv.y, z: 0 }, true);
+      body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    } else if (groundedRatio > 0.75 && effectiveInput.throttle === 0 && effectiveInput.brake === 0) {
+      const curLv = body.linvel();
+      const horizontalSpeed = Math.hypot(curLv.x, curLv.z);
+      if (horizontalSpeed < 0.04) {
+        body.setLinvel({ x: 0, y: curLv.y, z: 0 }, true);
+        const curAv = body.angvel();
+        if (Math.hypot(curAv.x, curAv.y, curAv.z) < 0.04) {
+          body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        }
+      }
+    }
+
+    // ─── 2. GAMEPAD HAPTIC RUMBLE FEEDBACK ───
     const speedDelta = prevSpeedKmhRef.current - speedKmh;
-    if (speedDelta > 25 && prevSpeedKmhRef.current > 30) {
-      // Sudden deceleration / heavy collision impact
+    const isCrash = speedDelta > 25 && prevSpeedKmhRef.current > 30;
+
+    if (isCrash) {
       rumbleImpact(Math.min(1.0, speedDelta / 60));
-    } else if (Math.abs(lateralSpeed) > 2.8 || (input.handbrake && speedKmh > 12)) {
-      // Tire slip / drifting vibration
+    } else if (isAirborne) {
+      // Turn off gamepad vibration feedback completely when car is in the air
+      stopGamepadRumble();
+    } else if (wasAirborne && flightDuration > 0.15) {
+      // Satisfying touchdown thud upon landing from an airborne jump
+      const downwardSpeed = Math.max(0, -linvel.y);
+      const landingSeverity = Math.min(1.0, Math.max(0.3, downwardSpeed / 10));
+      rumbleImpact(landingSeverity);
+    } else if (Math.abs(lateralSpeed) > 2.8 || (effectiveInput.handbrake && speedKmh > 12)) {
       rumbleSlip(Math.min(1.0, Math.abs(lateralSpeed) / 7));
     } else if (surface !== 'tarmac' && speedKmh > 15) {
-      // Off-road surface roughness
       const surfaceIntensity = surface === 'sand' ? 1.3 : surface === 'mud' ? 1.1 : 0.9;
       rumbleSurface(Math.min(1.0, (speedKmh / 80) * surfaceIntensity));
     }
     prevSpeedKmhRef.current = speedKmh;
 
-    // --- 5. APPLY AERODYNAMICS & SURFACE ROLLING DRAG ---
+    // ─── 3. APPLY AERODYNAMIC DOWNFORCE ───
     applyAerodynamics(body, config, forwardSpeed, _velocity, pos.y, dt);
 
     const surfaceDef = getSurfaceDefinition(surface);
 
-    // Physical rolling resistance (loose ground deceleration: sand, tall grass, mud)
-    if (groundedRatio > 0 && Math.abs(forwardSpeed) > 0.1) {
-      // During active throttle drifts, reduce rolling drag to maintain forward momentum
-      const isDriftingUnderPower = Math.abs(slipAngle) > 0.15 && input.throttle > 0.1;
-      const driftDragReduction = isDriftingUnderPower ? 0.35 : 1.0;
-      const rollingResistance = (surfaceDef.rollingResistance ?? 0.005) * driftDragReduction;
-      const dragImpulseMagnitude = rollingResistance * body.mass() * 9.81 * groundedRatio * dt;
-      const clampedDrag = Math.min(dragImpulseMagnitude, Math.abs(forwardSpeed) * body.mass());
-      _dragImpulse.copy(_forward).multiplyScalar(-Math.sign(forwardSpeed) * clampedDrag);
-      if (
-        Number.isFinite(_dragImpulse.x) &&
-        Number.isFinite(_dragImpulse.y) &&
-        Number.isFinite(_dragImpulse.z)
-      ) {
-        body.applyImpulse(_dragImpulse, true);
-      }
-    }
-
-    // --- 5.1. APPLY AWD POWER-SLIDE PROPULSION ---
-    applyAwdDriftPropulsion(
-      body,
-      config,
-      input,
-      _forward,
-      speedKmh,
-      slipAngle,
-      groundedRatio,
-      dt,
-      currentGear,
-    );
-
-    // --- 6. UPDATE TELEMETRY & ENGINE RPM ---
-    const targetRpm = calculateRPM(speedKmh, currentGear, input, {
+    // ─── 4. UPDATE ENGINE RPM & AUDIO TELEMETRY ───
+    const targetRpm = calculateRPM(speedKmh, currentGear, effectiveInput, {
       currentRpm: currentRpmRef.current,
       dt,
       groundedRatio,
       isAirborne,
       slipAngle,
-      steering: input.steering,
+      steering: effectiveInput.steering,
       looseSurfaceTractionLoss: surfaceDef.looseSurfaceTractionLoss,
     });
     currentRpmRef.current = targetRpm;
 
-    // --- 6.5. SYNC VISUALS ---
-    syncWheelVisuals(controller, wheelRefs, config, forwardSpeed, dt, targetRpm, currentGear);
+    // ─── 5. SYNC VISUAL WHEELS ───
+    syncWheelVisuals(solver, wheelRefs, config, forwardSpeed, dt, targetRpm, currentGear);
 
-    // --- 7. UPDATE TELEMETRY & HUD ---
+    // ─── 6. UPDATE HUD & GAME STORE TELEMETRY ───
     _euler.setFromQuaternion(_quat, 'YXZ');
-
-    // Batch all state updates into one call (strictly sanitizing values against NaN)
     _posTuple[0] = Number.isFinite(pos.x) ? pos.x : spawnPos[0];
     _posTuple[1] = Number.isFinite(pos.y) ? pos.y : spawnPos[1];
     _posTuple[2] = Number.isFinite(pos.z) ? pos.z : spawnPos[2];
 
-    // Update pre-allocated telemetry object to eliminate per-frame GC allocations
     _telemetryState.speed = Number.isFinite(speedKmh) ? Math.round(speedKmh) : 0;
     _telemetryState.lateralSpeed = Number.isFinite(lateralSpeed) ? lateralSpeed : 0;
     _telemetryState.slipAngle = Number.isFinite(slipAngle) ? slipAngle : 0;
@@ -660,13 +575,16 @@ export function useVehiclePhysics(
     _telemetryState.gear = currentGear;
     _telemetryState.heading = Number.isFinite(_euler.y) ? _euler.y : 0;
     _telemetryState.position = _posTuple;
-    _telemetryState.tireGrips = tireGrips;
+    _telemetryState.tireGrips[0] = tireGrips[0] ?? 1.0;
+    _telemetryState.tireGrips[1] = tireGrips[1] ?? 1.0;
+    _telemetryState.tireGrips[2] = tireGrips[2] ?? 1.0;
+    _telemetryState.tireGrips[3] = tireGrips[3] ?? 1.0;
     _telemetryState.surface = surface;
     _telemetryState.isAirborne = isAirborne;
 
     useGameStore.setState(_telemetryState);
 
-    // --- 7.5. MULTIPLAYER TELEMETRY BROADCAST ---
+    // ─── 7. MULTIPLAYER TELEMETRY BROADCAST ───
     if (useMultiplayerStore.getState().status !== 'disconnected' && !isSpectating && !!useMultiplayerStore.getState().currentRoom) {
       const curAngvel = body.angvel();
       const wheels = wheelRefs.current;
@@ -682,7 +600,7 @@ export function useVehiclePhysics(
 
       networkClient.sendTelemetry({
         pos: [_posTuple[0], _posTuple[1], _posTuple[2]],
-        rot: [bodyQuat.x, bodyQuat.y, bodyQuat.z, bodyQuat.w],
+        rot: [rot.x, rot.y, rot.z, rot.w],
         linVel: [linvel.x, linvel.y, linvel.z],
         angVel: [curAngvel.x, curAngvel.y, curAngvel.z],
         steer: wheels?.[0]?.rotation.y ?? 0,
@@ -695,7 +613,7 @@ export function useVehiclePhysics(
       });
     }
 
-    // --- 7.6. RALLY TAG PROXIMITY CHECK (TAGGER TOUCHES REMOTE DRIVER) ---
+    // ─── 8. RALLY TAG PROXIMITY CHECK (TAGGER TOUCHES REMOTE DRIVER) ───
     if (
       state.gameMode === 'tag' &&
       tagState.phase === 'active' &&
@@ -715,22 +633,41 @@ export function useVehiclePhysics(
       }
     }
 
-    // --- 8. CHECK MANUAL RESET (KEYBOARD 'R' OR GAMEPAD BUTTON) ---
+    // ─── 9. CHECK MANUAL RESET (KEYBOARD 'R' OR GAMEPAD BUTTON) ───
     if (input.reset) {
-      body.setTranslation({ x: spawnPos[0], y: spawnPos[1], z: spawnPos[2] }, true);
+      let resetSpawnY = spawnPos[1];
+      if (heightmapData && levelData) {
+        const groundY = getInterpolatedHeight(
+          spawnPos[0],
+          spawnPos[2],
+          heightmapData.heights,
+          heightmapData.rows,
+          heightmapData.cols,
+          levelData.terrainBase.width,
+          levelData.terrainBase.depth,
+        );
+        if (Number.isFinite(groundY)) {
+          resetSpawnY = groundY + getVehicleRestingHeight(config);
+        }
+      }
+      body.setTranslation({ x: spawnPos[0], y: resetSpawnY, z: spawnPos[2] }, true);
 
       _spawnEuler.set(0, spawnRotY, 0);
       _spawnQuat.setFromEuler(_spawnEuler);
       body.setRotation({ x: _spawnQuat.x, y: _spawnQuat.y, z: _spawnQuat.z, w: _spawnQuat.w }, true);
 
-      body.setLinvel({ x: 0, y: 0, z: 0 }, true);
-      body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      body.setLinvel(_zeroVel, true);
+      body.setAngvel(_zeroVel, true);
 
+      solver.resetSuspensionHistory();
       currentRpmRef.current = 1000;
       isAirborneRef.current = false;
+      airborneTimeRef.current = 0;
       settleFramesRef.current = 0;
+      isSettledRef.current = false;
       pausedStateRef.current = null;
       isPausedRef.current = false;
+      stopGamepadRumble(true);
 
       emitGameEvent('vehicle_reset', {
         reason: 'manual',
