@@ -33,41 +33,39 @@ export const MAX_DELTA = 0.05;
 export const DEFAULT_VEHICLE_CONFIG: VehicleConfig = {
   chassisMass: 150,
   chassisSize: [2, 0.6, 4],
-  weightDistribution: {
-    frontBias: 0.53,
-    engineOffsetZ: 0.80,
-    engineOffsetY: -0.18,
-    centerOfMassZ: 0.08,
-  },
   engine: {
-    maxForce: 400, // AWD powered
+    maxForce: 210, // Scaled for 1.4G launch acceleration on 150kg chassis: eliminates wheelies
     maxSpeed: 240,
+    engineBrakingForce: 120, // Responsive off-throttle engine braking (~0.30G)
   },
   drivetrain: {
-    frontBias: 0.5, // 50/50 AWD
+    frontBias: 0.65, // 65/35 front bias
+    frontPower: 220, // Front axle power (N) - authoritative front pull
+    rearPower: 140,  // Rear axle power (N) - compliant rear push (no power-oversteer spinouts)
+    slideFrontPowerBoost: 100, // Front axle receives +100N extra power whenever the car gets into a slide!
   },
   brakes: {
-    maxForce: 18, // Firm and responsive braking with balanced weight transfer
-    handbrakeForce: 65,
-    frontBias: 0.50, // 50/50 even 4-wheel brake distribution
+    maxForce: 880, // Authoritative competition braking (~2.0G deceleration on 150kg chassis)
+    handbrakeForce: 450, // Firm rear lockup for clean drift initiation
+    frontBias: 0.50,
   },
   suspension: {
-    frontAntiRollBarStiffness: 14.0, // Balanced ARB prevents understeer and keeps car level
-    rearAntiRollBarStiffness: 15.0,
-    antiSquatStiffness: 32.0,
+    frontAntiRollBarStiffness: 11.0, // Supple front ARB eliminates twitchy oversteer and keeps car level
+    rearAntiRollBarStiffness: 6.5,   // Softer rear ARB keeps rear tires planted
   },
   handling: {
     steeringCurve: [
-      [0, Math.PI / 4],      // 45 degrees at 0 km/h
-      [40, Math.PI / 4.8],   // ~37.5 degrees at 40 km/h (agile turn-in)
-      [90, Math.PI / 7.5],   // 24 degrees at 90 km/h (sharp medium-speed steering)
-      [150, Math.PI / 12],   // 15 degrees at 150 km/h
-      [220, Math.PI / 18],   // 10 degrees at 220 km/h
+      [0, Math.PI / 4.6],      // ~39.1 degrees at 0 km/h (agile hairpins & recovery)
+      [30, Math.PI / 7.5],     // ~24.0 degrees at 30 km/h (responsive slow corners)
+      [60, Math.PI / 12.0],    // ~15.0 degrees at 60 km/h (crisp medium corners)
+      [90, Math.PI / 18.0],    // ~10.0 degrees at 90 km/h (planted, stable sweepers)
+      [140, Math.PI / 26.0],   // ~6.9 degrees at 140 km/h (safe high-speed bends)
+      [220, Math.PI / 38.0],   // ~4.7 degrees at 220 km/h (rock-solid top speed tracking)
     ],
-    steeringSpeed: 7.5, // Crisp, responsive steering input
+    steeringSpeed: 6.5, // Smooth, measured steering input
     assists: {
-      yawDamping: 0.12, // Stable, progressive drift control preventing tank-slappers
-      driftGripMultiplier: 0.22,
+      yawDamping: 0.20, // Dynamic stability assist preventing spinouts
+      driftGripMultiplier: 0.54, // Progressive rear breakaway on handbrake
     },
   },
   aerodynamics: {
@@ -78,10 +76,10 @@ export const DEFAULT_VEHICLE_CONFIG: VehicleConfig = {
       // Front-left
       position: [-0.76, -0.2, 1.45],
       radius: 0.35,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.28,
-      suspensionStiffness: 34,
-      suspensionDamping: 4.0,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.22,
+      suspensionStiffness: 22,
+      suspensionDamping: 2.8,
       maxSuspensionForce: 8000,
       steerable: true,
       powered: true,
@@ -90,10 +88,10 @@ export const DEFAULT_VEHICLE_CONFIG: VehicleConfig = {
       // Front-right
       position: [0.76, -0.2, 1.45],
       radius: 0.35,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.28,
-      suspensionStiffness: 34,
-      suspensionDamping: 4.0,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.22,
+      suspensionStiffness: 22,
+      suspensionDamping: 2.8,
       maxSuspensionForce: 8000,
       steerable: true,
       powered: true,
@@ -102,10 +100,10 @@ export const DEFAULT_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-left
       position: [-0.76, -0.2, -1.4],
       radius: 0.35,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.30,
-      suspensionStiffness: 32,
-      suspensionDamping: 3.5,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.22,
+      suspensionStiffness: 20,
+      suspensionDamping: 3.0,
       maxSuspensionForce: 8000,
       steerable: false,
       powered: true,
@@ -114,10 +112,10 @@ export const DEFAULT_VEHICLE_CONFIG: VehicleConfig = {
       // Rear-right
       position: [0.76, -0.2, -1.4],
       radius: 0.35,
-      suspensionRestLength: 0.32,
-      suspensionTravel: 0.30,
-      suspensionStiffness: 32,
-      suspensionDamping: 3.5,
+      suspensionRestLength: 0.35,
+      suspensionTravel: 0.22,
+      suspensionStiffness: 20,
+      suspensionDamping: 3.0,
       maxSuspensionForce: 8000,
       steerable: false,
       powered: true,

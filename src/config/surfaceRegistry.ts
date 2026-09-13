@@ -9,8 +9,8 @@ export const SURFACE_REGISTRY: Record<SurfaceType, SurfaceDefinition> = {
     id: 'tarmac',
     name: 'Asphalt / Tarmac',
     tireModel: {
-      front: { baseGrip: 2.25, peakSlipAngle: Math.PI / 8, slideGrip: 1.65 },
-      rear: { baseGrip: 1.85, peakSlipAngle: Math.PI / 8.5, slideGrip: 1.25 },
+      front: { baseGrip: 2.65, peakSlipAngle: Math.PI / 8, slideGrip: 2.35 },
+      rear: { baseGrip: 2.25, peakSlipAngle: Math.PI / 8.5, slideGrip: 2.05 },
     },
     particles: {
       color: '#e5e7eb',
@@ -25,14 +25,14 @@ export const SURFACE_REGISTRY: Record<SurfaceType, SurfaceDefinition> = {
     },
     skidMarkOpacity: 0.9,
     rollingResistance: 0.002,
-    looseSurfaceTractionLoss: 0.16,
+    looseSurfaceTractionLoss: 0.06,
   },
   mud: {
     id: 'mud',
     name: 'Mud / Track Dirt',
     tireModel: {
-      front: { baseGrip: 1.95, peakSlipAngle: Math.PI / 7.5, slideGrip: 1.55 },
-      rear: { baseGrip: 1.80, peakSlipAngle: Math.PI / 7.5, slideGrip: 1.40 },
+      front: { baseGrip: 2.35, peakSlipAngle: Math.PI / 7.5, slideGrip: 2.10 },
+      rear: { baseGrip: 2.15, peakSlipAngle: Math.PI / 7.5, slideGrip: 1.95 },
     },
     particles: {
       color: '#8b6f4e',
@@ -47,14 +47,14 @@ export const SURFACE_REGISTRY: Record<SurfaceType, SurfaceDefinition> = {
     },
     skidMarkOpacity: 0.7,
     rollingResistance: 0.006,
-    looseSurfaceTractionLoss: 0.14,
+    looseSurfaceTractionLoss: 0.06,
   },
   grass: {
     id: 'grass',
     name: 'Grass / Meadow',
     tireModel: {
-      front: { baseGrip: 1.85, peakSlipAngle: Math.PI / 7.2, slideGrip: 1.45 },
-      rear: { baseGrip: 1.70, peakSlipAngle: Math.PI / 7.2, slideGrip: 1.30 },
+      front: { baseGrip: 2.20, peakSlipAngle: Math.PI / 7.2, slideGrip: 1.95 },
+      rear: { baseGrip: 2.05, peakSlipAngle: Math.PI / 7.2, slideGrip: 1.82 },
     },
     particles: {
       color: '#856a4b',
@@ -69,14 +69,14 @@ export const SURFACE_REGISTRY: Record<SurfaceType, SurfaceDefinition> = {
     },
     skidMarkOpacity: 0.4,
     rollingResistance: 0.008,
-    looseSurfaceTractionLoss: 0.12,
+    looseSurfaceTractionLoss: 0.05,
   },
   sand: {
     id: 'sand',
     name: 'Beach Sand / Dunes',
     tireModel: {
-      front: { baseGrip: 1.75, peakSlipAngle: Math.PI / 7.0, slideGrip: 1.35 },
-      rear: { baseGrip: 1.60, peakSlipAngle: Math.PI / 7.0, slideGrip: 1.20 },
+      front: { baseGrip: 2.10, peakSlipAngle: Math.PI / 7.0, slideGrip: 1.88 },
+      rear: { baseGrip: 1.95, peakSlipAngle: Math.PI / 7.0, slideGrip: 1.75 },
     },
     particles: {
       color: '#d4b483',
@@ -91,14 +91,14 @@ export const SURFACE_REGISTRY: Record<SurfaceType, SurfaceDefinition> = {
     },
     skidMarkOpacity: 0.5,
     rollingResistance: 0.008,
-    looseSurfaceTractionLoss: 0.15,
+    looseSurfaceTractionLoss: 0.07,
   },
   snow: {
     id: 'snow',
     name: 'Snow / Ice',
     tireModel: {
-      front: { baseGrip: 1.85, peakSlipAngle: Math.PI / 7.2, slideGrip: 1.45 },
-      rear: { baseGrip: 1.70, peakSlipAngle: Math.PI / 7.2, slideGrip: 1.30 },
+      front: { baseGrip: 2.20, peakSlipAngle: Math.PI / 7.2, slideGrip: 1.98 },
+      rear: { baseGrip: 2.05, peakSlipAngle: Math.PI / 7.2, slideGrip: 1.85 },
     },
     particles: {
       color: '#f0f9ff',
@@ -113,14 +113,14 @@ export const SURFACE_REGISTRY: Record<SurfaceType, SurfaceDefinition> = {
     },
     skidMarkOpacity: 0.3,
     rollingResistance: 0.006,
-    looseSurfaceTractionLoss: 0.14,
+    looseSurfaceTractionLoss: 0.06,
   },
   gravel: {
     id: 'gravel',
     name: 'Loose Gravel',
     tireModel: {
-      front: { baseGrip: 2.05, peakSlipAngle: Math.PI / 7.5, slideGrip: 1.65 },
-      rear: { baseGrip: 1.90, peakSlipAngle: Math.PI / 7.5, slideGrip: 1.50 },
+      front: { baseGrip: 2.45, peakSlipAngle: Math.PI / 7.5, slideGrip: 2.20 },
+      rear: { baseGrip: 2.25, peakSlipAngle: Math.PI / 7.5, slideGrip: 2.05 },
     },
     particles: {
       color: '#a8a29e',
@@ -135,7 +135,7 @@ export const SURFACE_REGISTRY: Record<SurfaceType, SurfaceDefinition> = {
     },
     skidMarkOpacity: 0.6,
     rollingResistance: 0.005,
-    looseSurfaceTractionLoss: 0.12,
+    looseSurfaceTractionLoss: 0.06,
   },
 };
 
