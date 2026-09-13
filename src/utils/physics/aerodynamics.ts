@@ -4,6 +4,8 @@ import type { VehicleConfig } from '@/types/vehicle';
 
 const _bodyQuat = new Quaternion();
 const _downVector = new Vector3();
+const _forwardVector = new Vector3();
+const _aeroPoint = new Vector3();
 const _waterDragImpulse = new Vector3();
 
 export function applyAerodynamics(
@@ -34,7 +36,14 @@ export function applyAerodynamics(
       Number.isFinite(_downVector.y) &&
       Number.isFinite(_downVector.z)
     ) {
-      body.applyImpulse(_downVector, true);
+      if (typeof body.translation === 'function' && typeof body.applyImpulseAtPoint === 'function') {
+        const pos = body.translation();
+        _forwardVector.set(0, 0, 1).applyQuaternion(_bodyQuat);
+        _aeroPoint.set(pos.x, pos.y, pos.z).addScaledVector(_forwardVector, 0.18);
+        body.applyImpulseAtPoint(_downVector, _aeroPoint, true);
+      } else {
+        body.applyImpulse(_downVector, true);
+      }
     }
   }
 

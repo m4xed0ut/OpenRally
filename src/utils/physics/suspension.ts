@@ -170,3 +170,24 @@ function applyWheelForce(body: RapierRigidBody, controller: IRapierVehicleContro
   }
 }
 
+/**
+ * Calculates the exact physical equilibrium resting height of the chassis center
+ * above the ground under normal static gravity sag (~30% suspension travel).
+ * Accounts for per-vehicle wheel mounting offsets, suspension rest lengths, and tire radii.
+ */
+export function getVehicleRestingHeight(config: VehicleConfig): number {
+  if (!config.wheels) return 0.75;
+  let totalClearance = 0;
+  for (let i = 0; i < config.wheels.length; i++) {
+    const w = config.wheels[i];
+    const wheelMountOffset = -w.position[1];
+    const restLen = w.suspensionRestLength;
+    const rad = w.radius;
+    const travel = w.suspensionTravel;
+    const staticSag = travel * 0.30;
+    const wheelRestClearance = wheelMountOffset + (restLen - staticSag) + rad;
+    totalClearance += wheelRestClearance;
+  }
+  return totalClearance / config.wheels.length;
+}
+

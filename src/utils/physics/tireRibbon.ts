@@ -3,6 +3,7 @@ import type { HeightmapData } from '@/types/terrain';
 import type { LevelData } from '@/types/level';
 import type { SurfaceType } from '@/types/vehicle';
 import { getInterpolatedHeight } from '@/utils/terrainCompiler';
+import { getElevatedStructureHeight } from '@/utils/physics/elevatedStructures';
 
 /**
  * Configuration options for a single tire track ribbon stream.
@@ -187,14 +188,21 @@ export function sampleTerrainHeightAndNormal(
   const { heights, cols, rows } = heightmapData;
   const { width, depth } = levelData.terrainBase;
 
-  const hCenter = getInterpolatedHeight(safeX, safeZ, heights, rows, cols, width, depth);
+  const sampleH = (sx: number, sz: number): number => {
+    let h = getInterpolatedHeight(sx, sz, heights, rows, cols, width, depth);
+    const sElev = getElevatedStructureHeight(sx, h + 1.2, sz, heightmapData, levelData);
+    if (sElev !== null) h = Math.max(h, sElev);
+    return h;
+  };
+
+  const hCenter = sampleH(safeX, safeZ);
   
   // Sample adjacent points (0.5m delta) to compute surface normal gradient
   const delta = 0.5;
-  const hX1 = getInterpolatedHeight(safeX + delta, safeZ, heights, rows, cols, width, depth);
-  const hX0 = getInterpolatedHeight(safeX - delta, safeZ, heights, rows, cols, width, depth);
-  const hZ1 = getInterpolatedHeight(safeX, safeZ + delta, heights, rows, cols, width, depth);
-  const hZ0 = getInterpolatedHeight(safeX, safeZ - delta, heights, rows, cols, width, depth);
+  const hX1 = sampleH(safeX + delta, safeZ);
+  const hX0 = sampleH(safeX - delta, safeZ);
+  const hZ1 = sampleH(safeX, safeZ + delta);
+  const hZ0 = sampleH(safeX, safeZ - delta);
 
   const dX = (hX1 - hX0) / (2 * delta);
   const dZ = (hZ1 - hZ0) / (2 * delta);
